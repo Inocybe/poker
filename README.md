@@ -15,7 +15,6 @@ poker/
 │   ├── poker_game.py      # Texas Hold'em game engine
 │   └── __init__.py
 ├── players/               # Student bot directory
-│   ├── bot_template.py    # Template for students to copy
 │   ├── random_bot.py      # Example random bot
 │   ├── conservative_bot.py # Example tight bot
 │   └── aggressive_bot.py  # Example loose/aggressive bot
