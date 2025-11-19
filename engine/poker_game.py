@@ -142,11 +142,30 @@ class PokerGame:
         if len(self.active_players) < 2:
             return
         
-        small_blind_player_index = (self.dealer_button + 1) % len(self.active_players)
-        big_blind_player_index = (self.dealer_button + 2) % len(self.active_players)
+        # Determine the players who post blinds relative to the dealer
+        # Find the index of the current dealer within the active players list
+        try:
+            dealer_active_index = self.active_players.index(self.player_ids[self.dealer_button])
+        except ValueError:
+            # Dealer might have been eliminated, find next active player as nominal dealer
+            for i in range(len(self.player_ids)):
+                potential_dealer_index = (self.dealer_button + i) % len(self.player_ids)
+                potential_dealer = self.player_ids[potential_dealer_index]
+                if potential_dealer in self.active_players:
+                    self.dealer_button = potential_dealer_index # Update actual dealer button
+                    dealer_active_index = self.active_players.index(potential_dealer)
+                    break
+            else: # Should not happen if len(self.active_players) >= 1
+                return # No active dealer found (e.g., all players eliminated)
         
-        small_blind_player = self.active_players[small_blind_player_index]
-        big_blind_player = self.active_players[big_blind_player_index]
+        if len(self.active_players) == 2:
+            # Heads-up: Dealer is small blind, non-dealer is big blind
+            small_blind_player = self.active_players[dealer_active_index]
+            big_blind_player = self.active_players[(dealer_active_index + 1) % 2]
+        else:
+            # Normal play: Small blind is left of dealer, big blind is left of small blind
+            small_blind_player = self.active_players[(dealer_active_index + 1) % len(self.active_players)]
+            big_blind_player = self.active_players[(dealer_active_index + 2) % len(self.active_players)]
         
         # Post small blind
         small_blind_amount = min(self.small_blind, self.player_chips[small_blind_player])
@@ -186,7 +205,22 @@ class PokerGame:
     def _start_betting_round(self):
         """Resets betting state for a new round."""
         self.players_acted = set()
-        self.current_player_index = (self.dealer_button + 1) % len(self.active_players)
+        # Find the index of the current dealer within the active players list
+        try:
+            dealer_active_index = self.active_players.index(self.player_ids[self.dealer_button])
+        except ValueError:
+            # Dealer might have been eliminated, find next active player as nominal dealer
+            for i in range(len(self.player_ids)):
+                potential_dealer_index = (self.dealer_button + i) % len(self.player_ids)
+                potential_dealer = self.player_ids[potential_dealer_index]
+                if potential_dealer in self.active_players:
+                    self.dealer_button = potential_dealer_index # Update actual dealer button
+                    dealer_active_index = self.active_players.index(potential_dealer)
+                    break
+            else: # Should not happen if len(self.active_players) >= 1
+                dealer_active_index = 0 # Default to first active player if no valid dealer is found (shouldn't happen with >=1 active)
+
+        self.current_player_index = (dealer_active_index + 1) % len(self.active_players)
         if self.round_name != "preflop":
              self.current_bet = 0
              for p in self.player_ids:
