@@ -182,4 +182,7 @@ cython_debug/
 
 logs/
 players/
+!player/aggressive_bot.py
+!player/conservitive_bot.py
+!player/random_bot.py
 .DS_Store
