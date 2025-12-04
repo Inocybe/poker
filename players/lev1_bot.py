@@ -8,10 +8,8 @@ from engine.poker_game import GameState
 
 
 class LevBot(PokerBotAPI):
-    """
-    Abstract base class that all poker bots must inherit from.
-    Students implement the required methods to create their bot strategy.
-    """
+
+
     
     def __init__(self, name: str):
         super().__init__(name)
@@ -19,6 +17,8 @@ class LevBot(PokerBotAPI):
         self.hands_won = 0
         self.raise_frequency = 0.5  # Default raise frequency
         self.play_frequency = 0.8   # Play 80% of hands
+        self.raise_amount_multiplier = 1.0 # Start raise amount at the same amount as big blind
+        self.premium_hand_bet_amount_multiplier = 1.5 # Amount to raise depeneding on good hands
 
         # Define strong starting hands
         self.premium_hands = [
@@ -28,6 +28,10 @@ class LevBot(PokerBotAPI):
             (Rank.KING, Rank.QUEEN), (Rank.KING, Rank.JACK), (Rank.QUEEN, Rank.JACK)
         ]
     
+
+
+
+
     def get_action(self, game_state: GameState, hole_cards: List[Card], 
                    legal_actions: List[PlayerAction], min_bet: int, max_bet: int) -> tuple:
         """
@@ -63,28 +67,32 @@ class LevBot(PokerBotAPI):
                           min_bet: int, max_bet: int) -> tuple:
         
 
-        if HandEvaluator.evaluate_hand(hole_cards) > 1:
+        premium_starting_hand = self._is_premium_starting_hand(hole_cards)
+        pair_starting_hand = self._is_premium_starting_hand(hole_cards)
 
-            if PlayerAction.CHECK in legal_actions:
-                return PlayerAction.CHECK, 0
+        #TODO IF GET REALLY GOOD STARTING HAND, CHANGE THESE VARS : 
+        #Important to remember this PlayerAction.CHECK in legal_actions
+        if (premium_starting_hand):
+            self.raise_amount_multiplier = self.raise_amount_multiplier * self.premium_hand_bet_amount_multiplier
+        #TODO ALSO FOR pair starting hand
+        if (pair_starting_hand):
+            self.raise_amount_multiplier = self.raise_amount_multiplier * self.premium_hand_bet_amount_multiplier
 
 
-
-
-        """Aggressive pre-flop strategy"""
-        if random.random() > self.play_frequency:
+        # random choosing to play even if doesn't have a good starting hand, ya never know what'll happen
+        if random.random() < self.play_frequency:
             if PlayerAction.CHECK in legal_actions:
                 return PlayerAction.CHECK, 0
             return PlayerAction.FOLD, 0
 
         # High probability of raising
         if PlayerAction.RAISE in legal_actions and random.random() < self.raise_frequency:
+
             # Raise 3-4x the big blind
-            raise_amount = min(random.randint(3, 4) * game_state.big_blind, max_bet)
-            raise_amount = max(raise_amount, min_bet)
+            raise_amount = self.raise_amount_multiplier * game_state.big_blind
             
             # Ensure raise amount is actually greater than current_bet if raising
-            if raise_amount > game_state.current_bet:
+            if self._is_raise_amount_valid(game_state, min_bet, max_bet, raise_amount):
                 return PlayerAction.RAISE, raise_amount
             elif PlayerAction.CALL in legal_actions:
                 return PlayerAction.CALL, 0
@@ -180,6 +188,7 @@ class LevBot(PokerBotAPI):
                  return True
         return False
 
+    
     def _is_premium_starting_hand(self, hole_cards: List[Card]) -> bool:
         card1, card2 = hole_cards
         
@@ -189,7 +198,19 @@ class LevBot(PokerBotAPI):
 
         return (hand_tuple1 in self.premium_hands or 
                      hand_tuple2 in self.premium_hands)
+    
+    
+    def _is_pair_starting_hand(self, hold_hards: List[Card]) -> bool:
+        card1, card2 = hold_hards
 
+        return (card1.rank == card2.rank)
+    
+    def _is_raise_amount_valid(self, game_state: GameState, min_bet: float, max_bet: float, amount: float) -> bool:
+        # Bet half pot on a draw
+        raise_amount = min(amount, max_bet)
+        raise_amount = max(raise_amount, min_bet)
+        
+        return raise_amount > game_state.current_bet
 
 
     def hand_complete(self, game_state: GameState, hand_result: Dict[str, any]):
@@ -210,7 +231,7 @@ class LevBot(PokerBotAPI):
         super().tournament_start(players, starting_chips)
         if len(players) <= 4:
             self.raise_frequency = 0.33
-            self.play_frequency = 0.9
+            self.play_frequency = 0.3
         elif len(players) >= 8:
             self.raise_frequency = 0.4
-            self.play_frequency = 0.7
+            self.play_frequency = 0.15
