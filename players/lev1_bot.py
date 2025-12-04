@@ -15,8 +15,9 @@ class LevBot(PokerBotAPI):
         super().__init__(name)
         self.hands_played = 0
         self.hands_won = 0
-        self.raise_frequency = 0.5  # Default raise frequency
+        self.raise_frequency = 0.2  # Default raise frequency
         self.play_frequency = 0.8   # Play 80% of hands
+        self.premium_hand_play_frequency = 1
         self.raise_amount_multiplier = 1.0 # Start raise amount at the same amount as big blind
         self.premium_hand_bet_amount_multiplier = 1.5 # Amount to raise depeneding on good hands
 
@@ -74,16 +75,17 @@ class LevBot(PokerBotAPI):
         #Important to remember this PlayerAction.CHECK in legal_actions
         if (premium_starting_hand):
             self.raise_amount_multiplier = self.raise_amount_multiplier * self.premium_hand_bet_amount_multiplier
+            self.play_frequency = self.premium_hand_play_frequency
         #TODO ALSO FOR pair starting hand
         if (pair_starting_hand):
             self.raise_amount_multiplier = self.raise_amount_multiplier * self.premium_hand_bet_amount_multiplier
+            self.play_frequency = self.premium_hand_play_frequency
 
 
         # random choosing to play even if doesn't have a good starting hand, ya never know what'll happen
-        if random.random() < self.play_frequency:
-            if PlayerAction.CHECK in legal_actions:
-                return PlayerAction.CHECK, 0
+        if not random.random() < self.play_frequency:
             return PlayerAction.FOLD, 0
+
 
         # High probability of raising
         if PlayerAction.RAISE in legal_actions and random.random() < self.raise_frequency:
@@ -99,6 +101,8 @@ class LevBot(PokerBotAPI):
             elif PlayerAction.CHECK in legal_actions:
                 return PlayerAction.CHECK, 0
         
+
+
         if PlayerAction.CALL in legal_actions:
             return PlayerAction.CALL, 0
             
@@ -229,9 +233,11 @@ class LevBot(PokerBotAPI):
 
     def tournament_start(self, players: List[str], starting_chips: int):
         super().tournament_start(players, starting_chips)
+        """
         if len(players) <= 4:
             self.raise_frequency = 0.33
             self.play_frequency = 0.3
         elif len(players) >= 8:
             self.raise_frequency = 0.4
             self.play_frequency = 0.15
+        """
