@@ -17,11 +17,27 @@ class LevBot(PokerBotAPI):
 
         self.hands_played = 0
         self.hands_won = 0
+
+        """preflop variables"""
         self.raise_frequency = 0.2  # Default raise frequency
         self.play_frequency = 0.6   # Default play frequency
         self.premium_hand_play_frequency = 1
         self.raise_amount_multiplier = 0.3 # Start raise amount at the same amount as big blind
         self.premium_hand_bet_amount_multiplier = 2.5 # Amount to raise depeneding on good hands
+        
+        """postflop variables"""
+        # variables that determine playing and raising and stuff
+        self.strong_draw_play_rate = 0.7
+
+        self.is_strong_pot_play_rate = 0.3
+
+        self.good_hand_play_rate = 0.8
+        self.great_hand_play_rate = 1.0
+        
+        self.good_hand_and_good_pot_play_rate = 0.5
+
+        ##self.bluff_rate = 0.5 no bluffing, yet
+
 
         # Define strong starting hands
         self.premium_hands = [
@@ -103,14 +119,11 @@ class LevBot(PokerBotAPI):
             raise_amount = self.raise_amount_multiplier * game_state.big_blind
             raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
             
-            # Ensure raise amount is actually greater than current_bet if raising
-            if raise_amount > game_state.big_blind:
-                return PlayerAction.RAISE, raise_amount
-            elif PlayerAction.CALL in legal_actions:
-                return PlayerAction.CALL, 0
-            elif PlayerAction.CHECK in legal_actions:
-                return PlayerAction.CHECK, 0
-        
+            
+            if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
+                return self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount)
+
+    
 
 
         if PlayerAction.CALL in legal_actions:
@@ -131,26 +144,40 @@ class LevBot(PokerBotAPI):
         hand_rank = HandEvaluator.HAND_RANKINGS[hand_type]
 
         strong_draw = self._has_strong_draw(all_cards)
-        strong_pot = 
+        strong_pot = self._is_strong_pot(all_cards)
 
-        # Strong hand (top pair or better)
-        if hand_rank >= HandEvaluator.HAND_RANKINGS['pair']:
-            if PlayerAction.RAISE in legal_actions:
-                # Bet 2/3 to full pot
-                raise_amount = game_state.pot / 2
+        good_hand_rank = hand_rank >= HandEvaluator.HAND_RANKINGS['pair']
+        great_hand_rank = hand_rank >= HandEvaluator.HAND_RANKINGS['three_of_a_kind']
+
+        if good_hand_rank and strong_pot:
+            if random.random() < self.good_hand_and_good_pot_play_rate:
+                if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
+                    return self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount)
+
+
+
+        # Great hand (three of a kind or better)
+        if great_hand_rank:
+            if PlayerAction.RAISE in legal_actions and random.random() < great_hand_rank:
+                raise_amount = (game_state.pot * self.raise_amount_multiplier)
                 raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
                 
-                if raise_amount > game_state.current_bet:
-                    return PlayerAction.RAISE, raise_amount
-                elif PlayerAction.CALL in legal_actions:
-                    return PlayerAction.CALL, 0
-                elif PlayerAction.CHECK in legal_actions:
-                    return PlayerAction.CHECK, 0
-            
-            if PlayerAction.CALL in legal_actions:
-                return PlayerAction.CALL, 0
-            if PlayerAction.CHECK in legal_actions:
-                return PlayerAction.CHECK, 0
+                if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
+                    return self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount)
+
+
+        # Strong hand (top pair or better)
+        if good_hand_rank:
+            if PlayerAction.RAISE in legal_actions and random.random() < good_hand_rank:
+                raise_amount = (game_state.pot * self.raise_amount_multiplier)
+                raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
+                
+                if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
+                    return self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount)
+
+
+
+
             
         if hand_rank < HandEvaluator.HAND_RANKINGS['pair']:
             if PlayerAction.CALL in legal_actions:
@@ -165,26 +192,50 @@ class LevBot(PokerBotAPI):
             if raise_amount > game_state.current_bet:
                 return PlayerAction.RAISE, raise_amount
 
-
-                
-        # Bluffing opportunity?
-        # If no one has bet, take a stab at the pot
-        """
-        if game_state.current_bet == 0 and PlayerAction.RAISE in legal_actions:
-            bluff_raise = min(game_state.pot // 2, max_bet)
-            bluff_raise = max(bluff_raise, min_bet)
-            if random.random() < 0.25: # Bluff 25% of the time
-                if bluff_raise > game_state.current_bet:
-                    return PlayerAction.RAISE, bluff_raise
-                elif PlayerAction.CHECK in legal_actions:
-                    return PlayerAction.CHECK, 0
-        """
         
         if PlayerAction.CHECK in legal_actions:
             return PlayerAction.CHECK, 0
         
         return PlayerAction.FOLD, 0
     
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    """
+    if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
+        return self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount)
+    """
+    def _apply_raise_amount_if_able(self, game_state: GameState, legal_actions: List[PlayerAction], raise_amount: float) -> PlayerAction:
+        if raise_amount > game_state.current_bet:
+            return PlayerAction.RAISE, raise_amount
+        elif PlayerAction.CALL in legal_actions:
+            return PlayerAction.CALL, 0
+        elif PlayerAction.CHECK in legal_actions:
+            return PlayerAction.CHECK, 0
+        return None
+
+
 
     def _has_strong_draw(self, all_cards: List[Card]) -> bool:
         """Check for strong drawing hands (flush or open-ended straight)"""
@@ -211,7 +262,7 @@ class LevBot(PokerBotAPI):
                 return True
 
         # Open-ended straight draw
-        ranks = sorted(list(set(card.rank.value for card in all_cards)))
+        ranks = sorted(list(set(card.rank.value for card in community_cards)))
         for i in range(len(ranks) - 3):
             if ranks[i+3] - ranks[i] == 3 and len(ranks) >=4 :
                 return True
