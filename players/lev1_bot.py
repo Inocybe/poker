@@ -19,22 +19,14 @@ class LevBot(PokerBotAPI):
         self.hands_won = 0
 
         """preflop variables"""
-        self.raise_frequency = 0.6  # Default raise frequency
-        self.play_frequency = 0.25   # Default play frequency
-        self.premium_hand_play_frequency = 1
         self.raise_amount_multiplier = 0.75 # Start raise amount at the same amount as big blind
-        self.premium_hand_bet_amount_multiplier = 3 # Amount to raise depeneding on good hands
+        self.premium_hand_raise_amount_multiplier = 3 # Amount to raise depeneding on good hands
         
         """postflop variables"""
         # variables that determine playing and raising and stuff
-        self.strong_draw_play_rate = 0.8
 
-        self.is_strong_pot_play_rate = 0.2
 
-        self.good_hand_play_rate = 0.85
-        self.great_hand_play_rate = 1.0
         
-        self.good_hand_and_good_pot_play_rate = 0.4
 
         ##self.bluff_rate = 0.5 no bluffing, yet
 
@@ -89,49 +81,48 @@ class LevBot(PokerBotAPI):
         premium_starting_hand = self._is_premium_starting_hand(hole_cards)
         pair_starting_hand = self._is_pair_starting_hand(hole_cards)
 
-        # checking if I am the big blind
-        if max(game_state.player_bets.values()) == game_state.current_bet:
-            pass
-
-
         #TODO IF GET REALLY GOOD STARTING HAND, CHANGE THESE VARS : 
         #Important to remember this PlayerAction.CHECK in legal_actions
         #TODO ALSO FOR pair starting hand
+        """
         if (pair_starting_hand) or (premium_starting_hand):
-            raise_amount = game_state.big_blind * 3 # bruh idk, jsut big nuber
+            if random.random() < self.raise_frequency:
+                raise_amount = game_state.big_blind * 3 # bruh idk, jsut big nuber
+                raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
+                
+                if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
+                    return self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount)
+            else:
+                if PlayerAction.CALL in legal_actions:
+                    return PlayerAction.CALL, 0
+                if PlayerAction.CHECK in legal_actions:
+                    return PlayerAction.CHECK, 0
+        """
+
+        if (pair_starting_hand) or (premium_starting_hand):
+            multiplyer = 0
+            if pair_starting_hand:
+                multiplyer = self.raise_amount_multiplier
+            if premium_starting_hand:
+                multiplyer = self.premium_hand_raise_amount_multiplier
+
+
+
+            raise_amount = game_state.big_blind * multiplyer # bruh idk, jsut big nuber
             raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
-            
+                
             if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
                 return self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount)
-            
+        else:
+            if PlayerAction.CALL in legal_actions:
+                    return PlayerAction.CALL, 0
+            if PlayerAction.CHECK in legal_actions:
+                    return PlayerAction.CHECK, 0
+
             #self.raise_amount_multiplier = self.raise_amount_multiplier * self.premium_hand_bet_amount_multiplier
             #self.play_frequency = self.premium_hand_play_frequency
 
 
-        # random choosing to play even if doesn't have a good starting hand, ya never know what'll happen
-        if not random.random() < self.play_frequency:
-            return PlayerAction.FOLD, 0
-
-
-        # High probability of raising
-        if PlayerAction.RAISE in legal_actions and random.random() < self.raise_frequency:
-
-            # Raise 3-4x the big blind
-            raise_amount = self.raise_amount_multiplier * game_state.big_blind
-            raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
-            
-            
-            if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
-                return self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount)
-
-    
-
-
-        if PlayerAction.CALL in legal_actions:
-            return PlayerAction.CALL, 0
-            
-        if PlayerAction.CHECK in legal_actions:
-            return PlayerAction.CHECK, 0
 
         return PlayerAction.FOLD, 0
 
@@ -150,16 +141,24 @@ class LevBot(PokerBotAPI):
         good_hand_rank = hand_rank >= HandEvaluator.HAND_RANKINGS['pair']
         great_hand_rank = hand_rank >= HandEvaluator.HAND_RANKINGS['three_of_a_kind']
 
+
+        # checking two varaibles, to change play stuff based on that
+        if great_hand_rank and strong_pot:
+            if PlayerAction.CALL in legal_actions:
+                return PlayerAction.CALL, 0
+            if PlayerAction.CHECK in legal_actions:
+                return PlayerAction.CHECK, 0
         if good_hand_rank and strong_pot:
             if PlayerAction.CHECK in legal_actions:
-                 return PlayerAction.CHECK, 0
-            if PlayerAction.CALL in legal_actions:
-                 return PlayerAction.CALL, 0
-
+                return PlayerAction.CHECK, 0    
+        if strong_draw and strong_pot:
+            if PlayerAction.CHECK in legal_actions:
+                return PlayerAction.CHECK, 0
+        
 
 
         # Great hand (three of a kind or better)
-        if great_hand_rank:
+        if great_hand_rank and not strong_pot:
             if PlayerAction.RAISE in legal_actions:
                 raise_amount = (game_state.pot * self.raise_amount_multiplier)
                 raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
@@ -167,7 +166,7 @@ class LevBot(PokerBotAPI):
 
 
         # Strong hand (top pair or better)
-        if good_hand_rank:
+        if good_hand_rank and not strong_pot:
             if PlayerAction.RAISE in legal_actions and random.random() < good_hand_rank:
                 raise_amount = (game_state.pot * self.raise_amount_multiplier)
                 raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
@@ -178,17 +177,9 @@ class LevBot(PokerBotAPI):
 
             
         if hand_rank < HandEvaluator.HAND_RANKINGS['pair']:
-            if PlayerAction.CALL in legal_actions:
-                return PlayerAction.CALL, 0
-            if PlayerAction.CHECK in legal_actions:
-                return PlayerAction.CHECK, 0
+            if PlayerAction.FOLD in legal_actions:
+                return PlayerAction.FOLD, 0
         
-        if random.random() < self.raise_frequency:
-            raise_amount = game_state.pot / 2
-            raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
-
-            if raise_amount > game_state.current_bet:
-                return PlayerAction.RAISE, raise_amount
 
         
         if PlayerAction.CHECK in legal_actions:
