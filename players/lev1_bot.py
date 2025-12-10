@@ -19,8 +19,8 @@ class LevBot(PokerBotAPI):
         self.hands_won = 0
 
         """preflop variables"""
-        self.raise_amount_multiplier = 0.75 # Start raise amount at the same amount as big blind
-        self.premium_hand_raise_amount_multiplier = 3 # Amount to raise depeneding on good hands
+        self.raise_amount_multiplier = 0.5 # Start raise amount at the same amount as big blind
+        self.premium_hand_raise_amount_multiplier = 1.5 # Amount to raise depeneding on good hands
         
         """postflop variables"""
         # variables that determine playing and raising and stuff
@@ -108,7 +108,7 @@ class LevBot(PokerBotAPI):
 
 
 
-            raise_amount = game_state.big_blind * multiplyer # bruh idk, jsut big nuber
+            raise_amount = game_state.pot * multiplyer # bruh idk, jsut big nuber
             raise_amount = self._clamp_raise_amount(game_state, min_bet, max_bet, raise_amount)
                 
             if self._apply_raise_amount_if_able(game_state, legal_actions, raise_amount) != None:
@@ -148,10 +148,11 @@ class LevBot(PokerBotAPI):
                 return PlayerAction.CALL, 0
             if PlayerAction.CHECK in legal_actions:
                 return PlayerAction.CHECK, 0
-        if good_hand_rank and strong_pot:
+        if good_hand_rank and strong_pot and game_state.community_cards.count < 5:
             if PlayerAction.CHECK in legal_actions:
-                return PlayerAction.CHECK, 0    
-        if strong_draw and strong_pot:
+                return PlayerAction.CHECK, 0
+        # potential to be fine    
+        if strong_draw and strong_pot and game_state.community_cards.count < 3:
             if PlayerAction.CHECK in legal_actions:
                 return PlayerAction.CHECK, 0
         
